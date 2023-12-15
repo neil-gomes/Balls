@@ -1,6 +1,7 @@
+$DEBUG
 ' Ball demo
 
-$DEBUG
+
 OPTION _EXPLICIT
 
 CONST MAX_BALLS = 2
@@ -17,6 +18,7 @@ TYPE Ball
     radius AS LONG
     colour AS _UNSIGNED LONG
     velocity AS Vector2
+    mass AS SINGLE
 END TYPE
 
 SCREEN _NEWIMAGE(800, 600, 32)
@@ -36,14 +38,15 @@ myBall(1).radius = 20
 myBall(1).colour = _RGB32(RND * 255, RND * 255, RND * 255)
 myBall(1).velocity.x = 2
 myBall(1).velocity.y = 0
+myBall(1).mass = 1
 
 myBall(2).position.x = 500
-myBall(2).position.y = 320
+myBall(2).position.y = 280
 myBall(2).radius = 20
 myBall(2).colour = _RGB32(RND * 255, RND * 255, RND * 255)
 myBall(2).velocity.x = 2
 myBall(2).velocity.y = 0
-
+myBall(2).mass = 1
 
 DO
     FOR i = 1 TO MAX_BALLS
@@ -108,25 +111,47 @@ END FUNCTION
 
 SUB CheckBallCollision (b1 AS Ball, b2 AS Ball)
     IF BallCollides(b1, b2) THEN
-        DIM AS SINGLE difx, dify, angleLoI, b1Velocity, b2Velocity, b1VelocityAngle, b2VelocityAngle
-        DIM AS SINGLE b1FinalVelLoI, b2FinalVelLoI
-        DIM AS Vector2 b1LoIVel, b2LoIVel
-        difx = b1.position.x - b2.position.x
-        dify = b1.position.y - b2.position.y
+        DIM AS SINGLE difx, dify, angleLoI, b1Speed, b2Speed
+        DIM AS SINGLE b1SpeedAngle, b2SpeedAngle
+        DIM AS SINGLE b1FinalLoIspeedx, b2FinalLoIspeedx
+        DIM AS Vector2 b1LoISpeedInitial, b2LoISpeedInitial
+        difx = b2.position.x - b1.position.x
+        dify = b2.position.y - b1.position.y
         angleLoI = ATN(dify / difx)
-        b1Velocity = SQR(b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y)
-        b2Velocity = -SQR(b2.velocity.x * b2.velocity.x + b2.velocity.y * b2.velocity.y)
-        b1VelocityAngle = ATN(b1.velocity.y / b1.velocity.x)
-        b2VelocityAngle = ATN(b2.velocity.y / b2.velocity.x)
-        b1LoIVel.x = COS(angleLoI + b1VelocityAngle) * b1Velocity
-        b1LoIVel.y = SIN(angleLoI + b1VelocityAngle) * b1Velocity
-        b2LoIVel.x = COS(angleLoI + b2VelocityAngle) * b2Velocity
-        b2LoIVel.y = SIN(angleLoI + b2VelocityAngle) * b2Velocity
-        b2FinalVelLoI = b1LoIVel.x
-        b1FinalVelLoI = b2LoIVel.x
-        b1.velocity.y = b1LoIVel.y * COS(angleLoI) + b1FinalVelLoI * SIN(angleLoI)
-        b1.velocity.x = b1LoIVel.y * SIN(angleLoI) + b1FinalVelLoI * COS(angleLoI)
-        b2.velocity.y = b2LoIVel.y * COS(angleLoI) + b2FinalVelLoI * SIN(angleLoI)
-        b2.velocity.x = b2LoIVel.y * SIN(angleLoI) + b2FinalVelLoI * COS(angleLoI)
+        b1Speed = SQR(b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y)
+        b2Speed = SQR(b2.velocity.x * b2.velocity.x + b2.velocity.y * b2.velocity.y)
+        b1SpeedAngle = ATN(b1.velocity.y / b1.velocity.x)
+        IF b1.velocity.y = 0 AND b1.velocity.x < 0 THEN
+            b1SpeedAngle = _PI
+        END IF
+
+        b2SpeedAngle = ATN(b2.velocity.y / b2.velocity.x)
+        IF b2.velocity.y = 0 AND b2.velocity.x < 0 THEN b2SpeedAngle = _PI
+
+        IF b1.velocity.x < 0 AND b1.velocity.y > 0 THEN b1SpeedAngle = _PI - b1SpeedAngle
+        IF b1.velocity.x < 0 AND b1.velocity.y < 0 THEN b1SpeedAngle = _PI + b1SpeedAngle
+        IF b2.velocity.x < 0 AND b2.velocity.y > 0 THEN b2SpeedAngle = _PI - b2SpeedAngle
+        IF b2.velocity.x < 0 AND b2.velocity.y < 0 THEN b2SpeedAngle = _PI + b2SpeedAngle
+
+        b1LoISpeedInitial.x = COS(-angleLoI + b1SpeedAngle) * b1Speed 'treat as u1
+        b1LoISpeedInitial.y = SIN(-angleLoI + b1SpeedAngle) * b1Speed
+        b2LoISpeedInitial.x = COS(-angleLoI + b2SpeedAngle) * b2Speed 'treat as u2
+        b2LoISpeedInitial.y = SIN(-angleLoI + b2SpeedAngle) * b2Speed
+
+        IF b1LoISpeedInitial.x > b2LoISpeedInitial.x THEN
+            b1FinalLoIspeedx = (b1LoISpeedInitial.x * (b1.mass - b2.mass) + (2 * b2.mass * b2LoISpeedInitial.x)) / (b1.mass + b2.mass)
+            b2FinalLoIspeedx = b1FinalLoIspeedx + (b1LoISpeedInitial.x - b2LoISpeedInitial.x)
+            'the formula v1=(u1(m1-m2)+2m2u2)/(m1+m2) was derived from the conservation of momentum as well as the
+            'elastic collision equation.This formula was used to get the final velocity along line of impact
+        ELSE
+            b2FinalLoIspeedx = (b2LoISpeedInitial.x * (b2.mass - b1.mass) + (2 * b1.mass * b1LoISpeedInitial.x)) / (b1.mass + b2.mass)
+            b1FinalLoIspeedx = (b2LoISpeedInitial.x - b1LoISpeedInitial.x) + b2FinalLoIspeedx
+
+        END IF
+
+        b1.velocity.x = b1FinalLoIspeedx * COS(angleLoI) + b1LoISpeedInitial.y * SIN(angleLoI)
+        b1.velocity.y = b1FinalLoIspeedx * SIN(angleLoI) + b1LoISpeedInitial.y * COS(angleLoI)
+        b2.velocity.x = b2FinalLoIspeedx * COS(angleLoI) + b2LoISpeedInitial.y * SIN(angleLoI)
+        b2.velocity.y = b2FinalLoIspeedx * SIN(angleLoI) + b2LoISpeedInitial.y * COS(angleLoI)
     END IF
 END SUB
