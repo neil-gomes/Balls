@@ -1,7 +1,6 @@
 $DEBUG
 ' Ball demo
 
-
 OPTION _EXPLICIT
 
 CONST MAX_BALLS = 2
