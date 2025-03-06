@@ -1,4 +1,3 @@
-$DEBUG
 ' Ball demo
 
 OPTION _EXPLICIT
