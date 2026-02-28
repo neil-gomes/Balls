@@ -4,6 +4,7 @@ CONST BALL_RADIUS_MIN = 4
 CONST BALL_RADIUS_MAX = 30
 
 DIM SHARED MAX_BALLS AS LONG: MAX_BALLS = 20
+DIM SHARED MAX_RECTS AS LONG: MAX_RECTS = 5
 DIM SHARED GRAVITY AS SINGLE: GRAVITY = 0.1
 DIM SHARED FRICTION AS SINGLE: FRICTION = 0.99
 
@@ -25,7 +26,16 @@ TYPE Ball
     immovable AS _BYTE
 END TYPE
 
+TYPE Rectangle
+    position AS Vector2
+    size AS Vector2
+    colour AS _UNSIGNED LONG
+    active AS _BYTE
+    immovable AS _BYTE
+END TYPE
+
 DIM SHARED myBall(MAX_BALLS) AS Ball
+DIM SHARED myRect(MAX_RECTS) AS Rectangle
 
 SCREEN _NEWIMAGE(800, 600, 32)
 
@@ -41,6 +51,10 @@ FOR i = 1 TO 3
     CreateImmovableBall myBall(MAX_BALLS - i + 1)
 NEXT
 
+FOR i = 1 TO MAX_RECTS
+    CreateWall myRect(i)
+NEXT
+
 DO
     FOR i = 1 TO MAX_BALLS
         UpdateBall myBall(i)
@@ -52,10 +66,20 @@ DO
         NEXT
     NEXT
 
+    FOR i = 1 TO MAX_BALLS
+        FOR j = 1 TO MAX_RECTS
+            CheckBallRectCollision myBall(i), myRect(j)
+        NEXT
+    NEXT
+
     CLS
 
     FOR i = 1 TO MAX_BALLS
         DrawBall myBall(i)
+    NEXT
+
+    FOR i = 1 TO MAX_RECTS
+        DrawRectangle myRect(i)
     NEXT
 
     _DISPLAY
@@ -216,7 +240,7 @@ SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
         ballA.position.y = ballA.position.y - ny * sepDist
         ballB.position.x = ballB.position.x + nx * sepDist
         ballB.position.y = ballB.position.y + ny * sepDist
-        
+
         vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
         vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
 
@@ -233,4 +257,71 @@ SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
         ballB.velocity.x = vn_B * nx + vt_B * tx
         ballB.velocity.y = vn_B * ny + vt_B * ty
     END IF
+END SUB
+
+
+SUB CreateWall (r AS Rectangle)
+    r.position.x = (_WIDTH / 4) + (_WIDTH / 2) * RND
+    r.position.y = (_HEIGHT / 4) + (_HEIGHT / 2) * RND
+    r.size.x = (_WIDTH / 4) * RND
+    r.size.y = (_HEIGHT / 4) * RND
+    r.colour = _RGB32(80, 80, 80)
+    r.active = -1
+    r.immovable = -1
+END SUB
+
+
+SUB DrawRectangle (r AS Rectangle)
+    DIM AS SINGLE halfWidth, halfHeight
+    halfWidth = r.size.x / 2
+    halfHeight = r.size.y / 2
+
+    LINE (r.position.x - halfWidth, r.position.y - halfHeight)-(r.position.x + halfWidth, r.position.y + halfHeight), r.colour, BF
+
+    IF r.immovable THEN
+        LINE (r.position.x - halfWidth - 2, r.position.y - halfHeight - 2)-(r.position.x + halfWidth + 2, r.position.y + halfHeight + 2), _RGB32(128, 128, 128), B
+    END IF
+END SUB
+
+
+SUB CheckBallRectCollision (b AS Ball, r AS Rectangle)
+    DIM AS SINGLE left, top, right, bottom
+    DIM AS SINGLE closestX, closestY, dx, dy, distance
+    DIM AS SINGLE nx, ny, tx, ty, vn, vt, overlap
+    DIM AS SINGLE halfWidth, halfHeight
+
+    halfWidth = r.size.x / 2
+    halfHeight = r.size.y / 2
+
+    left = r.position.x - halfWidth
+    top = r.position.y - halfHeight
+    right = r.position.x + halfWidth
+    bottom = r.position.y + halfHeight
+
+    closestX = _CLAMP(b.position.x, left, right)
+    closestY = _CLAMP(b.position.y, top, bottom)
+
+    dx = b.position.x - closestX
+    dy = b.position.y - closestY
+    distance = SQR(dx * dx + dy * dy)
+
+    IF distance >= b.radius THEN EXIT SUB
+
+    IF distance = 0 THEN distance = 0.001
+
+    nx = dx / distance
+    ny = dy / distance
+    tx = -ny
+    ty = nx
+
+    vn = b.velocity.x * nx + b.velocity.y * ny
+    IF vn >= 0 THEN EXIT SUB
+
+    overlap = b.radius - distance + 0.1
+    b.position.x = b.position.x + nx * overlap
+    b.position.y = b.position.y + ny * overlap
+
+    vt = b.velocity.x * tx + b.velocity.y * ty
+    b.velocity.x = -vn * nx + vt * tx
+    b.velocity.y = -vn * ny + vt * ty
 END SUB
