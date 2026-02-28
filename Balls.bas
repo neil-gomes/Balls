@@ -22,6 +22,7 @@ TYPE Ball
     angularVelocity AS SINGLE
     spriteID AS LONG
     active AS _BYTE
+    immovable AS _BYTE
 END TYPE
 
 DIM SHARED myBall(MAX_BALLS) AS Ball
@@ -34,6 +35,10 @@ DIM AS LONG i, j
 
 FOR i = 1 TO MAX_BALLS
     InitBall myBall(i)
+NEXT
+
+FOR i = 1 TO 3
+    CreateImmovableBall myBall(MAX_BALLS - i + 1)
 NEXT
 
 DO
@@ -77,10 +82,29 @@ SUB InitBall (b AS Ball)
     b.angularVelocity = 0
     b.spriteID = 0
     b.active = -1
+    b.immovable = 0
+END SUB
+
+
+SUB CreateImmovableBall (b AS Ball)
+    b.position.x = RandomFloat(50, _WIDTH - 50)
+    b.position.y = RandomFloat(50, _HEIGHT - 100)
+    b.radius = RandomFloat(15, 25)
+    b.colour = _RGB32(100 + RND * 50, 100 + RND * 50, 100 + RND * 50)
+    b.velocity.x = 0
+    b.velocity.y = 0
+    b.mass = b.radius * b.radius
+    b.rotation = 0
+    b.angularVelocity = 0
+    b.spriteID = 0
+    b.active = -1
+    b.immovable = -1
 END SUB
 
 
 SUB UpdateBall (b AS Ball)
+    IF b.immovable THEN EXIT SUB
+    
     b.velocity.y = b.velocity.y + GRAVITY
 
     b.position.x = b.position.x + b.velocity.x
@@ -121,6 +145,10 @@ END SUB
 SUB DrawBall (b AS Ball)
     CIRCLE (b.position.x, b.position.y), b.radius, b.colour
     PAINT (b.position.x, b.position.y), b.colour, b.colour
+    
+    IF b.immovable THEN
+        CIRCLE (b.position.x, b.position.y), b.radius + 2, _RGB32(128, 128, 128)
+    END IF
     
     DIM AS SINGLE speedAngle
     IF b.velocity.x <> 0 OR b.velocity.y <> 0 THEN
@@ -168,24 +196,41 @@ SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
     IF vn_A <= vn_B THEN EXIT SUB
 
     sepDist = (ballA.radius + ballB.radius - distance) / 2 + 0.1
-    ballA.position.x = ballA.position.x - nx * sepDist
-    ballA.position.y = ballA.position.y - ny * sepDist
-    ballB.position.x = ballB.position.x + nx * sepDist
-    ballB.position.y = ballB.position.y + ny * sepDist
 
-    vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
-    vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
+    IF ballA.immovable AND ballB.immovable THEN
+        EXIT SUB
+    ELSEIF ballA.immovable THEN
+        ballB.position.x = ballB.position.x + nx * sepDist * 2
+        ballB.position.y = ballB.position.y + ny * sepDist * 2
+        vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
+        ballB.velocity.x = -vn_B * nx + vt_B * tx
+        ballB.velocity.y = -vn_B * ny + vt_B * ty
+    ELSEIF ballB.immovable THEN
+        ballA.position.x = ballA.position.x - nx * sepDist * 2
+        ballA.position.y = ballA.position.y - ny * sepDist * 2
+        vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
+        ballA.velocity.x = -vn_A * nx + vt_A * tx
+        ballA.velocity.y = -vn_A * ny + vt_A * ty
+    ELSE
+        ballA.position.x = ballA.position.x - nx * sepDist
+        ballA.position.y = ballA.position.y - ny * sepDist
+        ballB.position.x = ballB.position.x + nx * sepDist
+        ballB.position.y = ballB.position.y + ny * sepDist
+        
+        vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
+        vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
 
-    oldVn_A = vn_A
-    oldVn_B = vn_B
+        oldVn_A = vn_A
+        oldVn_B = vn_B
 
-    massSum = ballA.mass + ballB.mass
-    massDiff = ballA.mass - ballB.mass
-    vn_A = (massDiff * oldVn_A + 2 * ballB.mass * oldVn_B) / massSum
-    vn_B = (-massDiff * oldVn_B + 2 * ballA.mass * oldVn_A) / massSum
+        massSum = ballA.mass + ballB.mass
+        massDiff = ballA.mass - ballB.mass
+        vn_A = (massDiff * oldVn_A + 2 * ballB.mass * oldVn_B) / massSum
+        vn_B = (-massDiff * oldVn_B + 2 * ballA.mass * oldVn_A) / massSum
 
-    ballA.velocity.x = vn_A * nx + vt_A * tx
-    ballA.velocity.y = vn_A * ny + vt_A * ty
-    ballB.velocity.x = vn_B * nx + vt_B * tx
-    ballB.velocity.y = vn_B * ny + vt_B * ty
+        ballA.velocity.x = vn_A * nx + vt_A * tx
+        ballA.velocity.y = vn_A * ny + vt_A * ty
+        ballB.velocity.x = vn_B * nx + vt_B * tx
+        ballB.velocity.y = vn_B * ny + vt_B * ty
+    END IF
 END SUB
