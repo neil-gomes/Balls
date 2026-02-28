@@ -151,7 +151,7 @@ SUB DrawBall (b AS Ball)
     END IF
     
     DIM AS SINGLE speedAngle
-    IF b.velocity.x <> 0 OR b.velocity.y <> 0 THEN
+    IF b.velocity.x <> 0 _ORELSE b.velocity.y <> 0 THEN
         speedAngle = _ATAN2(b.velocity.y, b.velocity.x)
         DIM AS SINGLE indicatorLen
         indicatorLen = b.radius * 0.7
@@ -197,7 +197,7 @@ SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
 
     sepDist = (ballA.radius + ballB.radius - distance) / 2 + 0.1
 
-    IF ballA.immovable AND ballB.immovable THEN
+    IF ballA.immovable _ANDALSO ballB.immovable THEN
         EXIT SUB
     ELSEIF ballA.immovable THEN
         ballB.position.x = ballB.position.x + nx * sepDist * 2
