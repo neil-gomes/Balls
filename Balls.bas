@@ -1,10 +1,11 @@
-' Ball demo
-
 OPTION _EXPLICIT
 
-CONST MAX_BALLS = 2
 CONST BALL_RADIUS_MIN = 4
 CONST BALL_RADIUS_MAX = 30
+
+DIM SHARED MAX_BALLS AS LONG: MAX_BALLS = 20
+DIM SHARED GRAVITY AS SINGLE: GRAVITY = 0.1
+DIM SHARED FRICTION AS SINGLE: FRICTION = 0.99
 
 TYPE Vector2
     x AS SINGLE
@@ -17,41 +18,34 @@ TYPE Ball
     colour AS _UNSIGNED LONG
     velocity AS Vector2
     mass AS SINGLE
+    rotation AS SINGLE
+    angularVelocity AS SINGLE
+    spriteID AS LONG
+    active AS _BYTE
 END TYPE
+
+DIM SHARED myBall(MAX_BALLS) AS Ball
 
 SCREEN _NEWIMAGE(800, 600, 32)
 
 RANDOMIZE TIMER
 
-DIM myBall(1 TO MAX_BALLS) AS Ball
-DIM i AS LONG
+DIM AS LONG i, j
 
-'FOR i = 1 TO MAX_BALLS
-'    InitBall myBall(i)
-'NEXT
-
-myBall(1).position.x = 30
-myBall(1).position.y = 300
-myBall(1).radius = 20
-myBall(1).colour = _RGB32(RND * 255, RND * 255, RND * 255)
-myBall(1).velocity.x = 2
-myBall(1).velocity.y = 0
-myBall(1).mass = 1
-
-myBall(2).position.x = 500
-myBall(2).position.y = 280
-myBall(2).radius = 20
-myBall(2).colour = _RGB32(RND * 255, RND * 255, RND * 255)
-myBall(2).velocity.x = 2
-myBall(2).velocity.y = 0
-myBall(2).mass = 1
+FOR i = 1 TO MAX_BALLS
+    InitBall myBall(i)
+NEXT
 
 DO
     FOR i = 1 TO MAX_BALLS
         UpdateBall myBall(i)
     NEXT
 
-    CheckBallCollision myBall(1), myBall(2)
+    FOR i = 1 TO MAX_BALLS - 1
+        FOR j = i + 1 TO MAX_BALLS
+            CheckBallCollision myBall(i), myBall(j)
+        NEXT
+    NEXT
 
     CLS
 
@@ -66,90 +60,140 @@ LOOP UNTIL _KEYHIT = 27
 SYSTEM
 
 
-SUB InitBall (b AS Ball)
-    b.position.x = RND * _WIDTH
-    b.position.y = RND * _HEIGHT
-    b.radius = BALL_RADIUS_MIN + RND * (BALL_RADIUS_MAX - BALL_RADIUS_MIN)
-    b.colour = _RGB32(RND * 255, RND * 255, RND * 255)
+FUNCTION RandomFloat! (min AS SINGLE, max AS SINGLE)
+    RandomFloat = RND * (max - min) + min
+END FUNCTION
 
-    DO
-        b.velocity.x = RND * 2
-        b.velocity.y = RND * 2
-    LOOP WHILE b.velocity.x = 0 OR b.velocity.y = 0
+
+SUB InitBall (b AS Ball)
+    b.position.x = RandomFloat(b.radius, _WIDTH - b.radius)
+    b.position.y = RandomFloat(b.radius, _HEIGHT - b.radius)
+    b.radius = RandomFloat(BALL_RADIUS_MIN, BALL_RADIUS_MAX)
+    b.colour = _RGB32(RND * 255, RND * 255, RND * 255)
+    b.velocity.x = RandomFloat(-2, 2)
+    b.velocity.y = RandomFloat(-2, 2)
+    b.mass = b.radius * b.radius
+    b.rotation = 0
+    b.angularVelocity = 0
+    b.spriteID = 0
+    b.active = -1
 END SUB
 
 
 SUB UpdateBall (b AS Ball)
-    IF b.position.x - b.radius < 0 OR b.position.x + b.radius >= _WIDTH THEN
-        b.velocity.x = -b.velocity.x
-    END IF
-
-    IF b.position.y - b.radius < 0 OR b.position.y + b.radius >= _HEIGHT THEN
-        b.velocity.y = -b.velocity.y
-    END IF
+    b.velocity.y = b.velocity.y + GRAVITY
 
     b.position.x = b.position.x + b.velocity.x
     b.position.y = b.position.y + b.velocity.y
+
+    b.velocity.x = b.velocity.x * FRICTION
+    b.velocity.y = b.velocity.y * FRICTION
+
+    IF b.radius > 0 THEN
+        b.angularVelocity = b.velocity.x / b.radius * 0.1
+    END IF
+    b.rotation = b.rotation + b.angularVelocity
+    IF b.rotation > 360 THEN b.rotation = b.rotation - 360
+    IF b.rotation < 0 THEN b.rotation = b.rotation + 360
+
+    IF b.position.x < b.radius THEN
+        b.position.x = b.radius
+        b.velocity.x = -b.velocity.x
+        b.angularVelocity = -b.angularVelocity
+    ELSEIF b.position.x > _WIDTH - b.radius THEN
+        b.position.x = _WIDTH - b.radius
+        b.velocity.x = -b.velocity.x
+        b.angularVelocity = -b.angularVelocity
+    END IF
+
+    IF b.position.y < b.radius THEN
+        b.position.y = b.radius
+        b.velocity.y = -b.velocity.y
+        b.angularVelocity = -b.angularVelocity
+    ELSEIF b.position.y > _HEIGHT - b.radius THEN
+        b.position.y = _HEIGHT - b.radius
+        b.velocity.y = -b.velocity.y * FRICTION
+        b.angularVelocity = b.angularVelocity * FRICTION
+    END IF
 END SUB
 
 
 SUB DrawBall (b AS Ball)
     CIRCLE (b.position.x, b.position.y), b.radius, b.colour
     PAINT (b.position.x, b.position.y), b.colour, b.colour
+    
+    DIM AS SINGLE speedAngle
+    IF b.velocity.x <> 0 OR b.velocity.y <> 0 THEN
+        speedAngle = _ATAN2(b.velocity.y, b.velocity.x)
+        DIM AS SINGLE indicatorLen
+        indicatorLen = b.radius * 0.7
+        LINE (b.position.x, b.position.y)-(b.position.x + COS(speedAngle) * indicatorLen, b.position.y + SIN(speedAngle) * indicatorLen), _RGB32(0, 0, 0)
+    END IF
 END SUB
 
 
-FUNCTION BallCollides%% (b1 AS Ball, b2 AS Ball)
-    DIM AS SINGLE difx, dify
-    difx = b1.position.x - b2.position.x
-    dify = b1.position.y - b2.position.y
-    BallCollides = (b1.radius + b2.radius >= SQR(difx * difx + dify * dify))
+FUNCTION GetBallSpeed! (b AS Ball)
+    GetBallSpeed = SQR(b.velocity.x * b.velocity.x + b.velocity.y * b.velocity.y)
 END FUNCTION
 
 
-SUB CheckBallCollision (b1 AS Ball, b2 AS Ball)
-    IF BallCollides(b1, b2) THEN
-        DIM AS SINGLE difx, dify, angleLoI, b1Speed, b2Speed
-        DIM AS SINGLE b1SpeedAngle, b2SpeedAngle
-        DIM AS SINGLE b1FinalLoIspeedx, b2FinalLoIspeedx
-        DIM AS Vector2 b1LoISpeedInitial, b2LoISpeedInitial
-        difx = b2.position.x - b1.position.x
-        dify = b2.position.y - b1.position.y
-        angleLoI = ATN(dify / difx)
-        b1Speed = SQR(b1.velocity.x * b1.velocity.x + b1.velocity.y * b1.velocity.y)
-        b2Speed = SQR(b2.velocity.x * b2.velocity.x + b2.velocity.y * b2.velocity.y)
-        b1SpeedAngle = ATN(b1.velocity.y / b1.velocity.x)
-        IF b1.velocity.y = 0 AND b1.velocity.x < 0 THEN
-            b1SpeedAngle = _PI
-        END IF
+FUNCTION GetBallDirection! (b AS Ball)
+    GetBallDirection = _ATAN2(b.velocity.y, b.velocity.x)
+END FUNCTION
 
-        b2SpeedAngle = ATN(b2.velocity.y / b2.velocity.x)
-        IF b2.velocity.y = 0 AND b2.velocity.x < 0 THEN b2SpeedAngle = _PI
 
-        IF b1.velocity.x < 0 AND b1.velocity.y > 0 THEN b1SpeedAngle = _PI - b1SpeedAngle
-        IF b1.velocity.x < 0 AND b1.velocity.y < 0 THEN b1SpeedAngle = _PI + b1SpeedAngle
-        IF b2.velocity.x < 0 AND b2.velocity.y > 0 THEN b2SpeedAngle = _PI - b2SpeedAngle
-        IF b2.velocity.x < 0 AND b2.velocity.y < 0 THEN b2SpeedAngle = _PI + b2SpeedAngle
+FUNCTION BallCollides% (ballA AS Ball, ballB AS Ball)
+    DIM AS SINGLE dx, dy, distanceSquared, radiusSumSquared
+    dx = ballB.position.x - ballA.position.x
+    dy = ballB.position.y - ballA.position.y
+    distanceSquared = dx * dx + dy * dy
+    radiusSumSquared = (ballA.radius + ballB.radius) * (ballA.radius + ballB.radius)
+    BallCollides = (distanceSquared <= radiusSumSquared)
+END FUNCTION
 
-        b1LoISpeedInitial.x = COS(-angleLoI + b1SpeedAngle) * b1Speed 'treat as u1
-        b1LoISpeedInitial.y = SIN(-angleLoI + b1SpeedAngle) * b1Speed
-        b2LoISpeedInitial.x = COS(-angleLoI + b2SpeedAngle) * b2Speed 'treat as u2
-        b2LoISpeedInitial.y = SIN(-angleLoI + b2SpeedAngle) * b2Speed
 
-        IF b1LoISpeedInitial.x > b2LoISpeedInitial.x THEN
-            b1FinalLoIspeedx = (b1LoISpeedInitial.x * (b1.mass - b2.mass) + (2 * b2.mass * b2LoISpeedInitial.x)) / (b1.mass + b2.mass)
-            b2FinalLoIspeedx = b1FinalLoIspeedx + (b1LoISpeedInitial.x - b2LoISpeedInitial.x)
-            'the formula v1=(u1(m1-m2)+2m2u2)/(m1+m2) was derived from the conservation of momentum as well as the
-            'elastic collision equation.This formula was used to get the final velocity along line of impact
-        ELSE
-            b2FinalLoIspeedx = (b2LoISpeedInitial.x * (b2.mass - b1.mass) + (2 * b1.mass * b1LoISpeedInitial.x)) / (b1.mass + b2.mass)
-            b1FinalLoIspeedx = (b2LoISpeedInitial.x - b1LoISpeedInitial.x) + b2FinalLoIspeedx
+SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
+    IF BallCollides(ballA, ballB) THEN
+        DIM AS SINGLE dx, dy, distance, nx, ny
+        DIM AS SINGLE tx, ty, sepDist, massSum, massDiff
+        DIM AS SINGLE vn_A, vn_B, vt_A, vt_B
+        DIM AS SINGLE oldVn_A, oldVn_B
 
-        END IF
+        dx = ballB.position.x - ballA.position.x
+        dy = ballB.position.y - ballA.position.y
+        distance = SQR(dx * dx + dy * dy)
 
-        b1.velocity.x = b1FinalLoIspeedx * COS(angleLoI) + b1LoISpeedInitial.y * SIN(angleLoI)
-        b1.velocity.y = b1FinalLoIspeedx * SIN(angleLoI) + b1LoISpeedInitial.y * COS(angleLoI)
-        b2.velocity.x = b2FinalLoIspeedx * COS(angleLoI) + b2LoISpeedInitial.y * SIN(angleLoI)
-        b2.velocity.y = b2FinalLoIspeedx * SIN(angleLoI) + b2LoISpeedInitial.y * COS(angleLoI)
+        IF distance = 0 THEN distance = 0.001
+
+        nx = dx / distance
+        ny = dy / distance
+        tx = -ny
+        ty = nx
+
+        vn_A = ballA.velocity.x * nx + ballA.velocity.y * ny
+        vn_B = ballB.velocity.x * nx + ballB.velocity.y * ny
+        IF vn_A <= vn_B THEN EXIT SUB
+
+        sepDist = (ballA.radius + ballB.radius - distance) / 2 + 0.1
+        ballA.position.x = ballA.position.x - nx * sepDist
+        ballA.position.y = ballA.position.y - ny * sepDist
+        ballB.position.x = ballB.position.x + nx * sepDist
+        ballB.position.y = ballB.position.y + ny * sepDist
+
+        vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
+        vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
+
+        oldVn_A = vn_A
+        oldVn_B = vn_B
+
+        massSum = ballA.mass + ballB.mass
+        massDiff = ballA.mass - ballB.mass
+        vn_A = (massDiff * oldVn_A + 2 * ballB.mass * oldVn_B) / massSum
+        vn_B = (-massDiff * oldVn_B + 2 * ballA.mass * oldVn_A) / massSum
+
+        ballA.velocity.x = vn_A * nx + vt_A * tx
+        ballA.velocity.y = vn_A * ny + vt_A * ty
+        ballB.velocity.x = vn_B * nx + vt_B * tx
+        ballB.velocity.y = vn_B * ny + vt_B * ty
     END IF
 END SUB
