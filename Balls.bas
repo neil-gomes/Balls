@@ -142,58 +142,50 @@ FUNCTION GetBallDirection! (b AS Ball)
 END FUNCTION
 
 
-FUNCTION BallCollides% (ballA AS Ball, ballB AS Ball)
-    DIM AS SINGLE dx, dy, distanceSquared, radiusSumSquared
+SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
+    DIM AS SINGLE dx, dy, distance, distanceSquared, radiusSumSquared
+    DIM AS SINGLE nx, ny, tx, ty, sepDist, massSum, massDiff
+    DIM AS SINGLE vn_A, vn_B, vt_A, vt_B, oldVn_A, oldVn_B
+
     dx = ballB.position.x - ballA.position.x
     dy = ballB.position.y - ballA.position.y
     distanceSquared = dx * dx + dy * dy
     radiusSumSquared = (ballA.radius + ballB.radius) * (ballA.radius + ballB.radius)
-    BallCollides = (distanceSquared <= radiusSumSquared)
-END FUNCTION
+    
+    IF distanceSquared > radiusSumSquared THEN EXIT SUB
+    
+    distance = SQR(distanceSquared)
 
+    IF distance = 0 THEN distance = 0.001
 
-SUB CheckBallCollision (ballA AS Ball, ballB AS Ball)
-    IF BallCollides(ballA, ballB) THEN
-        DIM AS SINGLE dx, dy, distance, nx, ny
-        DIM AS SINGLE tx, ty, sepDist, massSum, massDiff
-        DIM AS SINGLE vn_A, vn_B, vt_A, vt_B
-        DIM AS SINGLE oldVn_A, oldVn_B
+    nx = dx / distance
+    ny = dy / distance
+    tx = -ny
+    ty = nx
 
-        dx = ballB.position.x - ballA.position.x
-        dy = ballB.position.y - ballA.position.y
-        distance = SQR(dx * dx + dy * dy)
+    vn_A = ballA.velocity.x * nx + ballA.velocity.y * ny
+    vn_B = ballB.velocity.x * nx + ballB.velocity.y * ny
+    IF vn_A <= vn_B THEN EXIT SUB
 
-        IF distance = 0 THEN distance = 0.001
+    sepDist = (ballA.radius + ballB.radius - distance) / 2 + 0.1
+    ballA.position.x = ballA.position.x - nx * sepDist
+    ballA.position.y = ballA.position.y - ny * sepDist
+    ballB.position.x = ballB.position.x + nx * sepDist
+    ballB.position.y = ballB.position.y + ny * sepDist
 
-        nx = dx / distance
-        ny = dy / distance
-        tx = -ny
-        ty = nx
+    vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
+    vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
 
-        vn_A = ballA.velocity.x * nx + ballA.velocity.y * ny
-        vn_B = ballB.velocity.x * nx + ballB.velocity.y * ny
-        IF vn_A <= vn_B THEN EXIT SUB
+    oldVn_A = vn_A
+    oldVn_B = vn_B
 
-        sepDist = (ballA.radius + ballB.radius - distance) / 2 + 0.1
-        ballA.position.x = ballA.position.x - nx * sepDist
-        ballA.position.y = ballA.position.y - ny * sepDist
-        ballB.position.x = ballB.position.x + nx * sepDist
-        ballB.position.y = ballB.position.y + ny * sepDist
+    massSum = ballA.mass + ballB.mass
+    massDiff = ballA.mass - ballB.mass
+    vn_A = (massDiff * oldVn_A + 2 * ballB.mass * oldVn_B) / massSum
+    vn_B = (-massDiff * oldVn_B + 2 * ballA.mass * oldVn_A) / massSum
 
-        vt_A = ballA.velocity.x * tx + ballA.velocity.y * ty
-        vt_B = ballB.velocity.x * tx + ballB.velocity.y * ty
-
-        oldVn_A = vn_A
-        oldVn_B = vn_B
-
-        massSum = ballA.mass + ballB.mass
-        massDiff = ballA.mass - ballB.mass
-        vn_A = (massDiff * oldVn_A + 2 * ballB.mass * oldVn_B) / massSum
-        vn_B = (-massDiff * oldVn_B + 2 * ballA.mass * oldVn_A) / massSum
-
-        ballA.velocity.x = vn_A * nx + vt_A * tx
-        ballA.velocity.y = vn_A * ny + vt_A * ty
-        ballB.velocity.x = vn_B * nx + vt_B * tx
-        ballB.velocity.y = vn_B * ny + vt_B * ty
-    END IF
+    ballA.velocity.x = vn_A * nx + vt_A * tx
+    ballA.velocity.y = vn_A * ny + vt_A * ty
+    ballB.velocity.x = vn_B * nx + vt_B * tx
+    ballB.velocity.y = vn_B * ny + vt_B * ty
 END SUB
